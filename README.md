@@ -1,8 +1,9 @@
-# java-hot-reload
+# minecraft-plugin-hot-reload
 
-simple hot reload utility for minecraft plugins. supports both local and pterodactyl servers.
+simple hot reload script for minecraft plugins. supports both local and pterodactyl servers.
 
-setup
+## setup
+
 create a .env file with your config:
 
 ```bash

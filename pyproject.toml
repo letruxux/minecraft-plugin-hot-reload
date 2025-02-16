@@ -1,5 +1,5 @@
 [project]
-name = "java-hot-reload"
+name = "minecraft-plugin-hot-reload"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
