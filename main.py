@@ -6,6 +6,8 @@ from pathlib import Path
 from mcrcon import MCRcon
 from pydactyl import PterodactylClient
 from dotenv import load_dotenv
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 load_dotenv()
 
@@ -51,7 +53,7 @@ def upload_to_pterodactyl():
 
     try:
         with open(JAR_OUTPUT_PATH, "rb") as file:
-            ptero.client.servers.files.write(
+            ptero.client.servers.files.write_file(
                 PTERO_CONFIG["server_id"], f"plugins/{plugin_jar.name}", file
             )
         print(f"Uploaded {plugin_jar.name} to Pterodactyl server")
@@ -84,23 +86,49 @@ def restart_pterodactyl():
         return False
 
 
-def watch_and_reload(use_ptero):
-    last_modified = os.path.getmtime(JAR_OUTPUT_PATH)
+class PluginJarHandler(FileSystemEventHandler):
+    def __init__(self, use_ptero):
+        self.use_ptero = use_ptero
+        self.last_modified = time.time()
+        # Debounce time in seconds
+        self.debounce_time = 1
 
-    while True:
-        current_modified = os.path.getmtime(JAR_OUTPUT_PATH)
+    def on_modified(self, event):
+        if not event.is_directory and event.src_path == os.path.abspath(
+            JAR_OUTPUT_PATH
+        ):
+            current_time = time.time()
+            # Debounce to prevent multiple events firing for the same change
+            if current_time - self.last_modified > self.debounce_time:
+                print("Plugin JAR changed, updating...")
+                if self.use_ptero:
+                    if upload_to_pterodactyl() and restart_pterodactyl():
+                        print("Pterodactyl update successful!")
+                else:
+                    if copy_plugin_local() and reload_local():
+                        print("Local reload successful!")
+                self.last_modified = current_time
 
-        if current_modified > last_modified:
-            print("Plugin JAR changed, updating...")
-            if use_ptero:
-                if upload_to_pterodactyl() and restart_pterodactyl():
-                    print("Pterodactyl update successful!")
-            else:
-                if copy_plugin_local() and reload_local():
-                    print("Local reload successful!")
-            last_modified = current_modified
 
-        time.sleep(0.5)
+def watch_and_reload(use_ptero: bool):
+    # Create a file system observer
+    observer = Observer()
+    event_handler = PluginJarHandler(use_ptero)
+
+    # Get the directory containing the JAR file
+    jar_dir = os.path.dirname(os.path.abspath(JAR_OUTPUT_PATH))
+
+    # Schedule the observer to watch the directory
+    observer.schedule(event_handler, jar_dir, recursive=False)
+    observer.start()
+
+    try:
+        # Keep the main thread running
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
 
 
 def main():

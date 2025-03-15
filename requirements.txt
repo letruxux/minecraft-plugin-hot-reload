@@ -1,3 +1,4 @@
 mcrcon
 python-dotenv
 py-dactyl
+watchdog
